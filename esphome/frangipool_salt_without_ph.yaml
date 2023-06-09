@@ -1,14 +1,10 @@
 substitutions:
   name: frangipool
   friendly_name: FrangiPool
-  pump_uptime_delay: '1800.0'
   local_temp_address: '0xC40416C23220FF28'
   temp_address: '0x160121a14aac6f28'
-
-wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  ap:
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
 
 esphome:
   name: frangipool
@@ -20,6 +16,9 @@ esphome:
 dashboard_import:
   package_import_url: github://frangipool/esphome-config/esphome/frangipool_salt_without_ph.yaml@main
 
+packages:
+  common: github://frangipool/esphome-config/esphome/common/default.yaml@main
+  
 esp32:
   board: az-delivery-devkit-v4
 
@@ -74,16 +73,19 @@ interval:
           condition:
             and:
               - switch.is_on: pump
-              - sensor.in_range:
-                  id: pump_uptime
-                  above: ${pump_uptime_delay}
+              - lambda: |-
+                  if (id(pump_uptime).state >= id(pump_uptime_delay).state){
+                    return true;
+                  } else {
+                    return false;
+                  }
           then:
             - globals.set: 
                 id: store_pool_temp
                 value: !lambda "return id(pipe_temp).state;"
             - globals.set: 
                 id: store_pool_orp
-                value: !lambda "return id(realtime_orp).state;"
+                value: !lambda "return id(realtime_redox).state;"
 select:
   - platform: template
     name: Mode Filtration
@@ -96,6 +98,7 @@ select:
     restore_value: True
     initial_option: Auto
     entity_category: config
+    icon: mdi:engine
 
   - platform: template
     name: Mode Surpresseur
@@ -107,6 +110,7 @@ select:
     restore_value: True
     initial_option: "Off"
     entity_category: config
+    icon: mdi:robot-mower
   
 number:
   - platform: template
@@ -146,6 +150,18 @@ number:
     max_value: 730
     restore_value: True
     initial_value: 710
+    entity_category: config
+
+  - platform: template
+    name: Délais Filtration
+    id: pump_uptime_delay
+    optimistic: True  
+    unit_of_measurement: min
+    step: 5
+    min_value: 5
+    max_value: 30
+    restore_value: True
+    initial_value: 10
     entity_category: config
 
 sensor:
@@ -238,7 +254,7 @@ sensor:
     state_class: "measurement"
     icon: mdi:chemical-weapon
     entity_category: diagnostic
-    id: realtime_orp
+    id: realtime_redox
     accuracy_decimals: 1
     lambda: return ((2500-id(ads1115_a0).state)/1,037) + id(redox_offset);
 
@@ -262,6 +278,7 @@ sensor:
   - platform: template
     name: Redox Offset
     entity_category: diagnostic
+    id: redox_offset_sensor
     lambda: return id(redox_offset);
 
   - platform: template
@@ -327,6 +344,8 @@ button:
         - globals.set: 
             id: redox_offset
             value: !lambda "return 225 - (((2500-id(ads1115_a0).state)/1,037));"
+        - component.update: redox_offset_sensor
+        - component.update: realtime_redox
 
   - platform: template
     name: Redox Calibration 475mV
@@ -336,6 +355,8 @@ button:
         - globals.set: 
             id: redox_offset
             value: !lambda "return 475 - (((2500-id(ads1115_a0).state)/1,037));"
+        - component.update: redox_offset_sensor
+        - component.update: realtime_redox
 
   - platform: template
     name: Redox Calibration Reset
@@ -345,6 +366,8 @@ button:
         - globals.set: 
             id: redox_offset
             value: '0.0'
+        - component.update: redox_offset_sensor
+        - component.update: realtime_redox
 
   - platform: restart
     name: Reboot
