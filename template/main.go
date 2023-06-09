@@ -6,56 +6,57 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"log"
 	"os"
-	"strings"
 	"text/template"
+
+	"gopkg.in/yaml.v3"
 )
 
-type templateData struct {
-	Name         string
-	Electrolyser bool
-	Redox        bool
-	PH           bool
-	Booster      bool
+type devices struct {
+	Device []deviceConfig
+}
+
+type deviceConfig struct {
+	Name         string `yaml:"name"`
+	Electrolyser bool   `yaml:"electrolyser"`
+	Redox        bool   `yaml:"redox"`
+	PH           bool   `yaml:"ph"`
+	Booster      bool   `yaml:"booster"`
 }
 
 //go:embed frangipool.yaml.tmpl
 var templateConfig string
 
+//go:embed config.yaml
+var configsYaml string
+
+//go:embed README.md.tmpl
+var templateReadme string
+
 func main() {
 	fmt.Println("generating frangipool configs...")
-	versions := []string{"salt_booster_without_ph", "salt_without_ph", "salt_booster_without_ph_without_redox", "salt_without_ph_without_redox"}
 
-	for _, version := range versions {
-		data := templateData{}
-		data.Name = version
-		data.PH = true
-		data.Redox = true
+	var d devices
+	// Parse yaml config
+	if err := yaml.Unmarshal([]byte(configsYaml), &d.Device); err != nil {
+		log.Fatalf("error: %v", err)
+	}
 
-		if strings.Contains(version, "salt") {
-			data.Electrolyser = true
-		}
-		if strings.Contains(version, "booster") {
-			data.Booster = true
-		}
-		if strings.Contains(version, "without_ph") {
-			data.PH = false
-		}
-		if strings.Contains(version, "without_redox") {
-			data.Redox = false
-		}
+	// Generate esphome config files
+	for _, device := range d.Device {
 
 		tmpl, err := template.New("template").Parse(templateConfig)
 		if err != nil {
 			panic(err)
 		}
 
-		f, err := os.Create("frangipool_" + version + ".yaml")
+		f, err := os.Create("frangipool_" + device.Name + ".yaml")
 		if err != nil {
 			panic(err)
 		}
 
-		err = tmpl.Execute(f, data)
+		err = tmpl.Execute(f, device)
 		if err != nil {
 			panic(err)
 		}
@@ -66,4 +67,23 @@ func main() {
 
 	}
 
+	// Generate README
+	tmpl, err := template.New("template").Parse(templateReadme)
+	if err != nil {
+		panic(err)
+	}
+
+	f, err := os.Create("README.md")
+	if err != nil {
+		panic(err)
+	}
+
+	err = tmpl.Execute(f, d)
+	if err != nil {
+		panic(err)
+	}
+	err = f.Close()
+	if err != nil {
+		panic(err)
+	}
 }
