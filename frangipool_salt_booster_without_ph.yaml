@@ -13,11 +13,11 @@ esphome:
   name: frangipool
   friendly_name: FrangiPool
   project:
-    name: frangipool.salt_without_ph
+    name: frangipool.salt_booster_without_ph
     version: "0.1.0"
 
 dashboard_import:
-  package_import_url: github://frangipool/esphome-config/frangipool_salt_without_ph.yaml
+  package_import_url: github://frangipool/esphome-config/frangipool_salt_booster_without_ph.yaml
 
 esp32:
   board: nodemcu-32s
@@ -93,6 +93,17 @@ select:
     initial_option: Auto
     entity_category: config
     icon: mdi:engine
+  - platform: template
+    name: Mode Surpresseur
+    optimistic: True
+    options:
+      - "Off"
+      - Auto
+      - Forcé
+    restore_value: True
+    initial_option: "Off"
+    entity_category: config
+    icon: mdi:robot-mower
   
 number:
   - platform: template
@@ -298,6 +309,12 @@ switch:
             value: !lambda "return id(esptime).now().timestamp;"
 
 
+  - platform: gpio
+    pin: GPIO26
+    name: Surpresseur
+    id: booster
+    restore_mode: RESTORE_DEFAULT_OFF
+    icon: mdi:robot-mower
   - platform: gpio
     pin: GPIO27
     name: Electrolyseur

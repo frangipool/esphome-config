@@ -13,11 +13,11 @@ esphome:
   name: frangipool
   friendly_name: FrangiPool
   project:
-    name: frangipool.salt_without_ph
+    name: frangipool.{{ .Name }}
     version: "0.1.0"
 
 dashboard_import:
-  package_import_url: github://frangipool/esphome-config/frangipool_salt_without_ph.yaml
+  package_import_url: github://frangipool/esphome-config/frangipool_{{ .Name }}.yaml
 
 esp32:
   board: nodemcu-32s
@@ -45,6 +45,17 @@ dallas:
   - pin: GPIO23
     update_interval: 10s
 
+{{- if and (not .Redox) (not .PH) }}
+i2c:
+  sda: 21
+  scl: 22
+  scan: true
+  id: bus_a
+
+ads1115:
+  - address: 0x48
+{{- end}}
+
 globals:
   - id: pump_last_turn_on
     type: int
@@ -52,12 +63,14 @@ globals:
   - id: store_pool_temp
     type: float
     restore_value: True
+{{- if .Redox }}
   - id: store_pool_redox
     type: float
     restore_value: True
   - id: redox_offset
     type: float
     restore_value: True
+{{- end }}
     
 interval:
   - interval: 1min
@@ -75,10 +88,12 @@ interval:
           then:
             - globals.set: 
                 id: store_pool_temp
-                value: !lambda "return id(pipe_temp).state;" 
+                value: !lambda "return id(pipe_temp).state;"
+  {{- if .Redox }} 
             - globals.set: 
                 id: store_pool_redox
                 value: !lambda "return id(realtime_redox).state;"
+  {{- end }}
 
 select:
   - platform: template
@@ -93,6 +108,20 @@ select:
     initial_option: Auto
     entity_category: config
     icon: mdi:engine
+
+{{- if .Booster }}
+  - platform: template
+    name: Mode Surpresseur
+    optimistic: True
+    options:
+      - "Off"
+      - Auto
+      - Forcé
+    restore_value: True
+    initial_option: "Off"
+    entity_category: config
+    icon: mdi:robot-mower
+{{- end }}
   
 number:
   - platform: template
@@ -106,7 +135,9 @@ number:
     max_value: 2.0
     restore_value: True
     initial_value: 0.0
-    entity_category: config   
+    entity_category: config
+
+{{- if .Redox }}   
   - platform: template
     name: Consigne Redox Max
     id: max_redox
@@ -132,6 +163,7 @@ number:
     restore_value: True
     initial_value: 710
     entity_category: config
+{{- end }}
 
   - platform: template
     name: Délais Filtration
@@ -212,6 +244,8 @@ sensor:
       } else {
         return 0.0;
       } 
+
+{{- if .Redox }} 
   - platform: ads1115
     id: ads1115_a0
     internal: true
@@ -257,6 +291,7 @@ sensor:
     entity_category: diagnostic
     id: redox_offset_sensor
     lambda: return id(redox_offset);
+{{- end }}
 
   - platform: template
     internal: True
@@ -297,15 +332,26 @@ switch:
             id: pump_last_turn_on
             value: !lambda "return id(esptime).now().timestamp;"
 
+{{ if .Booster }}
+  - platform: gpio
+    pin: GPIO26
+    name: Surpresseur
+    id: booster
+    restore_mode: RESTORE_DEFAULT_OFF
+    icon: mdi:robot-mower
+{{- end }}
 
+{{- if .Electrolyser }}
   - platform: gpio
     pin: GPIO27
     name: Electrolyseur
     id: electrolyser
     restore_mode: RESTORE_DEFAULT_ON
     icon: mdi:chemical-weapon
+{{- end }}
 
-button: 
+button:
+{{- if .Redox }} 
   - platform: template
     name: Redox Calibration 225mV
     entity_category: config
@@ -338,6 +384,7 @@ button:
             value: '0.0'
         - component.update: redox_offset_sensor
         - component.update: realtime_redox
+{{- end }}
 
   - platform: restart
     name: Reboot
