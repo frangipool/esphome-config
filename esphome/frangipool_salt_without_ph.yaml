@@ -3,22 +3,22 @@ substitutions:
   friendly_name: FrangiPool
   local_temp_address: '0xC40416C23220FF28'
   temp_address: '0x160121a14aac6f28'
-  wifi_ssid: !secret wifi_ssid
-  wifi_password: !secret wifi_password
 
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+  
 esphome:
   name: frangipool
   friendly_name: FrangiPool
   project:
     name: frangipool.salt_without_ph
-    version: "main"
+    version: "0.1.0"
 
 dashboard_import:
-  package_import_url: github://frangipool/esphome-config/esphome/frangipool_salt_without_ph.yaml@main
+  package_import_url: github://frangipool/esphome-config/esphome/frangipool_salt_without_ph.yaml@dev
 
-packages:
-  common: github://frangipool/esphome-config/esphome/common/default.yaml@main
-  
 esp32:
   board: az-delivery-devkit-v4
 
