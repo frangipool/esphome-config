@@ -18,10 +18,14 @@ Vous trouverez [le PCB ici](https://github.com/frangipool/pcb)
 
 | configuration | Filtration | Surpresseur | Electrolyseur | Température Local | Température Eau (avec fonction antigel) | Redox | pH |
 |:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| [frangipool_salt_booster.yaml](frangipool_salt_booster.yaml) | X |  X  |  X  | X | X |  X  |  X  |
 | [frangipool_salt.yaml](frangipool_salt.yaml) | X |  -  |  X  | X | X |  X  |  X  |
-| [frangipool_salt_without_ph.yaml](frangipool_salt_without_ph.yaml) | X |  -  |  X  | X | X |  X  |  -  |
-| [frangipool_salt_without_redox.yaml](frangipool_salt_without_redox.yaml) | X |  -  |  X  | X | X |  -  |  X  |
+| [frangipool_salt_wo_ph.yaml](frangipool_salt_wo_ph.yaml) | X |  -  |  X  | X | X |  X  |  -  |
+| [frangipool_salt_wo_redox.yaml](frangipool_salt_wo_redox.yaml) | X |  -  |  X  | X | X |  -  |  X  |
+| [frangipool_salt_wo_ph_wo_redox.yaml](frangipool_salt_wo_ph_wo_redox.yaml) | X |  -  |  X  | X | X |  -  |  -  |
+| [frangipool_salt_booster.yaml](frangipool_salt_booster.yaml) | X |  X  |  X  | X | X |  X  |  X  |
+| [frangipool_salt_booster_wo_ph.yaml](frangipool_salt_booster_wo_ph.yaml) | X |  X  |  X  | X | X |  X  |  -  |
+| [frangipool_salt_booster_wo_redox.yaml](frangipool_salt_booster_wo_redox.yaml) | X |  X  |  X  | X | X |  -  |  X  |
+| [frangipool_salt_booster_wo_ph_wo_redox.yaml](frangipool_salt_booster_wo_ph_wo_redox.yaml) | X |  X  |  X  | X | X |  -  |  -  |
 
 ## Installation
 
