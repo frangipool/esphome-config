@@ -5,9 +5,9 @@ substitutions:
   temp_address: '0x160121a14aac6f28'
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
   ap:
+    ssid: $friendly_name Fallback Hostspot
+    password: "12345678"
   
 esphome:
   name: frangipool
@@ -17,20 +17,22 @@ esphome:
     version: "0.1.0"
 
 dashboard_import:
-  package_import_url: github://frangipool/esphome-config/esphome/frangipool_salt_without_ph.yaml@dev
+  package_import_url: github://frangipool/esphome-config/frangipool_salt_without_ph.yaml
 
 esp32:
-  board: az-delivery-devkit-v4
+  board: nodemcu-32s
 
 logger:
   level: INFO
 
 api:
-  encryption:
-    key: !secret api_encryption_key
 
 ota:
-  password: !secret password
+
+improv_serial:
+
+esp32_improv:
+  authorizer: none
 
 captive_portal:
 
@@ -86,6 +88,7 @@ interval:
             - globals.set: 
                 id: store_pool_orp
                 value: !lambda "return id(realtime_redox).state;"
+
 select:
   - platform: template
     name: Mode Filtration
@@ -185,7 +188,6 @@ sensor:
       - median:
           window_size: 12
           send_every: 6
-    # Gestion de protection en cas de risque de gel, on force la filtration quand la température devient négative dans la canalisation
     on_value_range:
       - below: !lambda return id(min_antifreeze_temp).state;
         then:
@@ -198,7 +200,7 @@ sensor:
               data:
                 title: Message from ${friendly_name}
               data_template:
-                message: Mode hors-gel activé sur la piscine
+                message: Mode hors-gel actif
       - above: !lambda return id(max_antifreeze_temp).state;
         then:
           - binary_sensor.template.publish:
@@ -210,7 +212,7 @@ sensor:
               data:
                 title: Message from ${friendly_name}
               data_template:
-                message: Fin du mode hors-gel sur la piscine
+                message: Fin du mode hors-gel
 
   - platform: template
     name: Température Piscine
@@ -222,7 +224,6 @@ sensor:
     lambda: |-
       return id(store_pool_temp);
 
-  # Durée de fonctionnement de la pompe
   - platform: template
     name: Pump Uptime
     id: pump_uptime
@@ -234,7 +235,6 @@ sensor:
         return 0.0;
       } 
 
-  # Redox
   - platform: ads1115
     id: ads1115_a0
     internal: true
@@ -297,7 +297,6 @@ sensor:
     entity_category: diagnostic
 
 binary_sensor:
-  # On passe à true si la protection antigel est active
   - platform: template
     name: Antigel
     device_class: cold
