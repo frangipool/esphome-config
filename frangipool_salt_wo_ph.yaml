@@ -44,6 +44,14 @@ time:
 dallas:
   - pin: GPIO23
     update_interval: 10s
+i2c:
+  sda: 21
+  scl: 22
+  scan: true
+  id: bus_a
+
+ads1115:
+  - address: 0x48
 
 globals:
   - id: pump_last_turn_on
@@ -106,7 +114,7 @@ number:
     max_value: 2.0
     restore_value: True
     initial_value: 0.0
-    entity_category: config   
+    entity_category: config
   - platform: template
     name: Consigne Redox Max
     id: max_redox
@@ -233,7 +241,7 @@ sensor:
     entity_category: diagnostic
     id: realtime_redox
     accuracy_decimals: 1
-    lambda: return ((2500-id(ads1115_a0).state)/1,037) + id(redox_offset);
+    lambda: return ((2500-id(ads1115_a0).state)/1.037) + id(redox_offset);
 
   - platform: template
     name: Redox
@@ -296,8 +304,6 @@ switch:
         - globals.set: 
             id: pump_last_turn_on
             value: !lambda "return id(esptime).now().timestamp;"
-
-
   - platform: gpio
     pin: GPIO27
     name: Electrolyseur
@@ -313,7 +319,7 @@ button:
       then:
         - globals.set: 
             id: redox_offset
-            value: !lambda "return 225 - (((2500-id(ads1115_a0).state)/1,037));"
+            value: !lambda "return 225 - (((2500-id(ads1115_a0).state)/1.037));"
         - component.update: redox_offset_sensor
         - component.update: realtime_redox
 
@@ -324,7 +330,7 @@ button:
       then:
         - globals.set: 
             id: redox_offset
-            value: !lambda "return 475 - (((2500-id(ads1115_a0).state)/1,037));"
+            value: !lambda "return 475 - (((2500-id(ads1115_a0).state)/1.037));"
         - component.update: redox_offset_sensor
         - component.update: realtime_redox
 

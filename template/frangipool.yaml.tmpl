@@ -45,7 +45,7 @@ dallas:
   - pin: GPIO23
     update_interval: 10s
 
-{{- if and (not .Redox) (not .PH) }}
+{{- if or .Redox .PH }}
 i2c:
   sda: 21
   scl: 22
@@ -71,6 +71,14 @@ globals:
     type: float
     restore_value: True
 {{- end }}
+{{- if .PH }}
+  - id: store_pool_ph
+    type: float
+    restore_value: True
+  - id: ph_offset
+    type: float
+    restore_value: True
+{{- end }}
     
 interval:
   - interval: 1min
@@ -89,11 +97,16 @@ interval:
             - globals.set: 
                 id: store_pool_temp
                 value: !lambda "return id(pipe_temp).state;"
-  {{- if .Redox }} 
+          {{- if .Redox }} 
             - globals.set: 
                 id: store_pool_redox
                 value: !lambda "return id(realtime_redox).state;"
-  {{- end }}
+          {{- end }}
+          {{- if .PH }} 
+            - globals.set: 
+                id: store_pool_ph
+                value: !lambda "return id(realtime_ph).state;"
+          {{- end }}
 
 select:
   - platform: template
@@ -137,7 +150,7 @@ number:
     initial_value: 0.0
     entity_category: config
 
-{{- if .Redox }}   
+{{- if and (.Redox) (.Electrolyser) }}
   - platform: template
     name: Consigne Redox Max
     id: max_redox
@@ -267,7 +280,7 @@ sensor:
     entity_category: diagnostic
     id: realtime_redox
     accuracy_decimals: 1
-    lambda: return ((2500-id(ads1115_a0).state)/1,037) + id(redox_offset);
+    lambda: return ((2500-id(ads1115_a0).state)/1.037) + id(redox_offset);
 
   - platform: template
     name: Redox
@@ -278,6 +291,7 @@ sensor:
     id: pool_redox
     accuracy_decimals: 1
     lambda: return id(store_pool_redox);
+  {{- if .Electrolyser }}
     on_value_range:
       - above: !lambda return id(max_redox).state;
         then:
@@ -285,12 +299,49 @@ sensor:
       - below: !lambda return id(min_redox).state;
         then:
         - switch.turn_on: electrolyser
+  {{- end }}
 
   - platform: template
     name: Redox Offset
     entity_category: diagnostic
     id: redox_offset_sensor
     lambda: return id(redox_offset);
+{{- end }}
+
+{{- if .PH }} 
+  - platform: ads1115
+    id: ads1115_a1
+    internal: true
+    multiplexer: 'A1_GND'
+    gain: 6.144
+    update_interval: 10s
+    filters:
+      - median:
+          window_size: 12
+          send_every: 6
+
+  - platform: template
+    name: pH Temps Réel
+    state_class: "measurement"
+    icon: mdi:ph
+    entity_category: diagnostic
+    id: realtime_ph
+    accuracy_decimals: 1
+    lambda: return 3.56 * id(ads1115_a1).state - 1.889 + id(ph_offset);
+
+  - platform: template
+    name: pH
+    state_class: "measurement"
+    icon: mdi:ph
+    id: pool_ph
+    accuracy_decimals: 1
+    lambda: return id(store_pool_ph);
+
+  - platform: template
+    name: pH Offset
+    entity_category: diagnostic
+    id: ph_offset_sensor
+    lambda: return id(ph_offset);
 {{- end }}
 
   - platform: template
@@ -332,7 +383,7 @@ switch:
             id: pump_last_turn_on
             value: !lambda "return id(esptime).now().timestamp;"
 
-{{ if .Booster }}
+{{- if .Booster }}
   - platform: gpio
     pin: GPIO26
     name: Surpresseur
@@ -359,7 +410,7 @@ button:
       then:
         - globals.set: 
             id: redox_offset
-            value: !lambda "return 225 - (((2500-id(ads1115_a0).state)/1,037));"
+            value: !lambda "return 225 - (((2500-id(ads1115_a0).state)/1.037));"
         - component.update: redox_offset_sensor
         - component.update: realtime_redox
 
@@ -370,7 +421,7 @@ button:
       then:
         - globals.set: 
             id: redox_offset
-            value: !lambda "return 475 - (((2500-id(ads1115_a0).state)/1,037));"
+            value: !lambda "return 475 - (((2500-id(ads1115_a0).state)/1.037));"
         - component.update: redox_offset_sensor
         - component.update: realtime_redox
 
@@ -384,6 +435,19 @@ button:
             value: '0.0'
         - component.update: redox_offset_sensor
         - component.update: realtime_redox
+{{- end }}
+
+{{- if .PH }} 
+  - platform: template
+    name: pH Calibration 7.00
+    entity_category: config
+    on_press:
+      then:
+        - globals.set: 
+            id: ph_offset
+            value: !lambda "return 7.0 - 3.56 * id(ads1115_a1).state - 1.889;"
+        - component.update: ph_offset_sensor
+        - component.update: realtime_ph
 {{- end }}
 
   - platform: restart

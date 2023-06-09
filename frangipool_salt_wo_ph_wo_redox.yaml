@@ -44,14 +44,6 @@ time:
 dallas:
   - pin: GPIO23
     update_interval: 10s
-i2c:
-  sda: 21
-  scl: 22
-  scan: true
-  id: bus_a
-
-ads1115:
-  - address: 0x48
 
 globals:
   - id: pump_last_turn_on
@@ -225,8 +217,6 @@ switch:
         - globals.set: 
             id: pump_last_turn_on
             value: !lambda "return id(esptime).now().timestamp;"
-
-
   - platform: gpio
     pin: GPIO27
     name: Electrolyseur
