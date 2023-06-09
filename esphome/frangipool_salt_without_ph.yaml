@@ -2,8 +2,6 @@ substitutions:
   name: frangipool
   friendly_name: FrangiPool
   pump_uptime_delay: '1800.0'
-  max_antifreeze_temp: '0.0'
-  min_antifreeze_temp: '-2.0'
   max_orp: '740.0'
   min_orp: '710.0'
   local_temp_address: '0xC40416C23220FF28'
@@ -17,6 +15,12 @@ wifi:
 esphome:
   name: frangipool
   friendly_name: FrangiPool
+  project:
+    name: frangipool.salt_without_ph
+    version: "main"
+
+dashboard_import:
+  package_import_url: github://frangipool/esphome-config/esphome/frangipool_salt_without_ph.yaml@main
 
 esp32:
   board: az-delivery-devkit-v4
@@ -82,6 +86,38 @@ interval:
             - globals.set: 
                 id: store_pool_orp
                 value: !lambda "return id(realtime_orp).state;"
+select:
+  - platform: template
+    name: Mode Filtration
+    optimistic: True
+    options:
+      - Auto
+      - On 24h
+      - "Off"
+      - Hiver
+    restore_value: True
+    initial_option: Auto
+
+  - platform: template
+    name: Mode Surpresseur
+    optimistic: True
+    options:
+      - "Off"
+      - Auto
+      - Forcé
+    restore_value: True
+    initial_option: "Off"
+  
+number:
+  - platform: template
+    name: Consigne Antigel
+    id: max_antifreeze_temp
+    optimistic: True  
+    step: 0.2
+    min_value: -2.0
+    max_value: 2.0
+    restore_value: True
+    initial_value: 0.0
 
 sensor:
   # Sondes de températures
@@ -106,7 +142,7 @@ sensor:
           send_every: 6
     # Gestion de protection en cas de risque de gel, on force la filtration quand la température devient négative dans la canalisation
     on_value_range:
-      - below: ${min_antifreeze_temp}
+      - below: !lambda return id(min_antifreeze_temp).state;
         then:
           - binary_sensor.template.publish:
               id: antifreeze
@@ -118,7 +154,7 @@ sensor:
                 title: Message from ${friendly_name}
               data_template:
                 message: Mode hors-gel activé sur la piscine
-      - above: ${max_antifreeze_temp}
+      - above: !lambda return id(max_antifreeze_temp).state;
         then:
           - binary_sensor.template.publish:
               id: antifreeze
@@ -199,6 +235,12 @@ sensor:
   - platform: template
     name: "Offset Redox"
     lambda: return id(redox_offset);
+
+  
+  - platform: template
+    internal: True
+    id: min_antifreeze_temp
+    lambda: return id(max_antifreeze_temp).state - 1;
     
   - platform: uptime
     name: Uptime
@@ -219,13 +261,13 @@ binary_sensor:
     icon: mdi:snowflake-alert
     
   - platform: status
-    name: $friendly_name Status
+    name: Status
     entity_category: diagnostic
 
 switch:
   - platform: gpio
     pin: GPIO25
-    name: "Pompe $friendly_name"
+    name: "Filtration"
     id: pump
     restore_mode: RESTORE_DEFAULT_OFF
     icon: mdi:engine
