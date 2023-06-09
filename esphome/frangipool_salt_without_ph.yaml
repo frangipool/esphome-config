@@ -2,8 +2,6 @@ substitutions:
   name: frangipool
   friendly_name: FrangiPool
   pump_uptime_delay: '1800.0'
-  max_orp: '740.0'
-  min_orp: '710.0'
   local_temp_address: '0xC40416C23220FF28'
   temp_address: '0x160121a14aac6f28'
 
@@ -97,6 +95,7 @@ select:
       - Hiver
     restore_value: True
     initial_option: Auto
+    entity_category: config
 
   - platform: template
     name: Mode Surpresseur
@@ -107,23 +106,53 @@ select:
       - Forcé
     restore_value: True
     initial_option: "Off"
+    entity_category: config
   
 number:
   - platform: template
     name: Consigne Antigel
     id: max_antifreeze_temp
-    optimistic: True  
+    optimistic: True
+    unit_of_measurement: °C
+    device_class: temperature
     step: 0.2
     min_value: -2.0
     max_value: 2.0
     restore_value: True
     initial_value: 0.0
+    entity_category: config
+  
+  - platform: template
+    name: Consigne Redox Max
+    id: max_orp
+    optimistic: True  
+    unit_of_measurement: mV
+    device_class: voltage
+    step: 10
+    min_value: 670
+    max_value: 750
+    restore_value: True
+    initial_value: 740
+    entity_category: config
+
+  - platform: template
+    name: Consigne Redox Min
+    id: min_orp
+    optimistic: True  
+    unit_of_measurement: mV
+    device_class: voltage
+    step: 10
+    min_value: 650
+    max_value: 730
+    restore_value: True
+    initial_value: 710
+    entity_category: config
 
 sensor:
   # Sondes de températures
   - platform: dallas
     address: $local_temp_address
-    name: "Température local"
+    name: Température Local
     id: local_temp
     accuracy_decimals: 1
     filters:
@@ -133,7 +162,7 @@ sensor:
 
   - platform: dallas
     address: $temp_address
-    name: "Température canalisation"
+    name: Température Canalisation
     accuracy_decimals: 1
     id: pipe_temp
     filters:
@@ -168,7 +197,7 @@ sensor:
                 message: Fin du mode hors-gel sur la piscine
 
   - platform: template
-    name: "Température $friendly_name"
+    name: Température Piscine
     unit_of_measurement: "°C"
     device_class: "temperature"
     state_class: "measurement"
@@ -189,16 +218,13 @@ sensor:
         return 0.0;
       } 
 
-  # ORP
+  # Redox
   - platform: ads1115
     id: ads1115_a0
     internal: true
     multiplexer: 'A0_GND'
     gain: 6.144
-    unit_of_measurement: "mV"
     update_interval: 10s
-    device_class: "voltage"
-    state_class: "measurement"
     filters:
       - multiply: 1000
       - median:
@@ -206,17 +232,18 @@ sensor:
           send_every: 6
 
   - platform: template
-    name: "ORP temps réel"
+    name: Redox Temps Réel
     unit_of_measurement: "mV"
     device_class: "voltage"
     state_class: "measurement"
     icon: mdi:chemical-weapon
+    entity_category: diagnostic
     id: realtime_orp
     accuracy_decimals: 1
     lambda: return ((2500-id(ads1115_a0).state)/1,037) + id(redox_offset);
 
   - platform: template
-    name: "ORP"
+    name: Redox
     unit_of_measurement: "mV"
     device_class: "voltage"
     state_class: "measurement"
@@ -225,18 +252,18 @@ sensor:
     accuracy_decimals: 1
     lambda: return id(store_pool_orp);
     on_value_range:
-      - above: ${max_orp}
+      - above: !lambda return id(max_orp).state;
         then:
         - switch.turn_off: electrolyser
-      - below: ${min_orp}
+      - below: !lambda return id(min_orp).state;
         then:
         - switch.turn_on: electrolyser
 
   - platform: template
-    name: "Offset Redox"
+    name: Redox Offset
+    entity_category: diagnostic
     lambda: return id(redox_offset);
 
-  
   - platform: template
     internal: True
     id: min_antifreeze_temp
@@ -267,7 +294,7 @@ binary_sensor:
 switch:
   - platform: gpio
     pin: GPIO25
-    name: "Filtration"
+    name: Filtration
     id: pump
     restore_mode: RESTORE_DEFAULT_OFF
     icon: mdi:engine
@@ -279,21 +306,22 @@ switch:
 
   - platform: gpio
     pin: GPIO26
-    name: "Surpresseur"
+    name: Surpresseur
     id: robot
     restore_mode: RESTORE_DEFAULT_OFF
     icon: mdi:robot-mower
 
   - platform: gpio
     pin: GPIO27
-    name: "Electrolyseur"
+    name: Electrolyseur
     id: electrolyser
     restore_mode: RESTORE_DEFAULT_ON
     icon: mdi:chemical-weapon
 
 button:
   - platform: template
-    name: "Calibration 225mV"
+    name: Redox Calibration 225mV
+    entity_category: config
     on_press:
       then:
         - globals.set: 
@@ -301,7 +329,8 @@ button:
             value: !lambda "return 225 - (((2500-id(ads1115_a0).state)/1,037));"
 
   - platform: template
-    name: "Calibration 475mV"
+    name: Redox Calibration 475mV
+    entity_category: config
     on_press:
       then:
         - globals.set: 
@@ -309,7 +338,8 @@ button:
             value: !lambda "return 475 - (((2500-id(ads1115_a0).state)/1,037));"
 
   - platform: template
-    name: "Reset calibration"
+    name: Redox Calibration Reset
+    entity_category: config
     on_press:
       then:
         - globals.set: 
