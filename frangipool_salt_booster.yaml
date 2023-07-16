@@ -247,7 +247,6 @@ sensor:
     gain: 6.144
     update_interval: 10s
     filters:
-      - multiply: 1000
       - median:
           window_size: 12
           send_every: 6
@@ -261,7 +260,9 @@ sensor:
     entity_category: diagnostic
     id: realtime_redox
     accuracy_decimals: 1
-    lambda: return ((2500-id(ads1115_a0).state)/1.037) + id(redox_offset);
+    lambda: return ((2.5-id(ads1115_a0).state)/1.037) + id(redox_offset);
+    filters:
+      - multiply: 1000
 
   - platform: template
     name: Redox
