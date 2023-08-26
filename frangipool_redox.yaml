@@ -98,13 +98,13 @@ sensor:
     lambda: return ((2.5-id(ads1115_a0).state)/1.037) + id(redox_offset);
     filters:
       - multiply: 1000
-    on_value_range:
-      - above: !lambda return id(max_redox).state;
-        then:
-        - switch.turn_off: electrolyser
-      - below: !lambda return id(min_redox).state;
-        then:
-        - switch.turn_on: electrolyser    
+#    on_value_range:
+#      - above: !lambda return id(max_redox).state;
+#        then:
+#        - switch.turn_off: electrolyser
+#      - below: !lambda return id(min_redox).state;
+#        then:
+#        - switch.turn_on: electrolyser    
 
   - platform: template
     name: Redox Offset
