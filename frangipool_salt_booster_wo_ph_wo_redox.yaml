@@ -8,10 +8,11 @@ wifi:
   ap:
     ssid: $friendly_name Fallback Hostspot
     password: "12345678"
-  
+
 esphome:
-  name: frangipool
-  friendly_name: FrangiPool
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
   project:
     name: frangipool.salt_booster_wo_ph_wo_redox
     version: "0.1.0"
@@ -52,7 +53,7 @@ globals:
   - id: store_pool_temp
     type: float
     restore_value: True
-    
+
 interval:
   - interval: 1min
     then:
@@ -67,7 +68,7 @@ interval:
                     return false;
                   }
           then:
-            - globals.set: 
+            - globals.set:
                 id: store_pool_temp
                 value: !lambda "return id(pipe_temp).state;"
 
@@ -84,6 +85,7 @@ select:
     initial_option: Auto
     entity_category: config
     icon: mdi:engine
+
   - platform: template
     name: Mode Surpresseur
     optimistic: True
@@ -95,7 +97,7 @@ select:
     initial_option: "Off"
     entity_category: config
     icon: mdi:robot-mower
-  
+
 number:
   - platform: template
     name: Consigne Antigel
@@ -113,7 +115,7 @@ number:
   - platform: template
     name: Délais Filtration
     id: pump_uptime_delay
-    optimistic: True  
+    optimistic: True
     unit_of_measurement: min
     step: 5
     min_value: 5
@@ -130,9 +132,10 @@ sensor:
     id: local_temp
     accuracy_decimals: 1
     filters:
-      - median:
-          window_size: 12
+      - sliding_window_moving_average:
+          window_size: 18
           send_every: 6
+          send_first_at: 6
 
   - platform: dallas
     address: $temp_address
@@ -140,9 +143,10 @@ sensor:
     accuracy_decimals: 1
     id: pipe_temp
     filters:
-      - median:
-          window_size: 12
+      - sliding_window_moving_average:
+          window_size: 18
           send_every: 6
+          send_first_at: 6
     on_value_range:
       - below: !lambda return id(min_antifreeze_temp).state;
         then:
@@ -194,7 +198,7 @@ sensor:
     internal: True
     id: min_antifreeze_temp
     lambda: return id(max_antifreeze_temp).state - 1;
-    
+
   - platform: uptime
     name: Uptime
     unit_of_measurement: s
@@ -211,7 +215,7 @@ binary_sensor:
     device_class: cold
     id: antifreeze
     icon: mdi:snowflake-alert
-    
+
   - platform: status
     name: Status
     entity_category: diagnostic
@@ -223,19 +227,25 @@ switch:
     id: pump
     restore_mode: RESTORE_DEFAULT_OFF
     icon: mdi:engine
-    on_turn_on: 
+    on_turn_on:
       then:
-        - globals.set: 
+        - globals.set:
             id: pump_last_turn_on
             value: !lambda "return id(esptime).now().timestamp;"
+
   - platform: gpio
-    pin: GPIO26
+    pin:
+      number: GPIO26
+      inverted: true
     name: Surpresseur
     id: booster
     restore_mode: RESTORE_DEFAULT_OFF
     icon: mdi:robot-mower
+
   - platform: gpio
-    pin: GPIO27
+    pin:
+      number: GPIO27
+      inverted: false
     name: Electrolyseur
     id: electrolyser
     restore_mode: RESTORE_DEFAULT_ON
