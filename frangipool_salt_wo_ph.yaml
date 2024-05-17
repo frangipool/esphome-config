@@ -8,10 +8,11 @@ wifi:
   ap:
     ssid: $friendly_name Fallback Hostspot
     password: "12345678"
-  
+
 esphome:
-  name: frangipool
-  friendly_name: FrangiPool
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
   project:
     name: frangipool.salt_wo_ph
     version: "0.1.0"
@@ -44,6 +45,7 @@ time:
 dallas:
   - pin: GPIO23
     update_interval: 10s
+
 i2c:
   sda: 21
   scl: 22
@@ -66,7 +68,7 @@ globals:
   - id: redox_offset
     type: float
     restore_value: True
-    
+
 interval:
   - interval: 1min
     then:
@@ -81,10 +83,10 @@ interval:
                     return false;
                   }
           then:
-            - globals.set: 
+            - globals.set:
                 id: store_pool_temp
-                value: !lambda "return id(pipe_temp).state;" 
-            - globals.set: 
+                value: !lambda "return id(pipe_temp).state;"
+            - globals.set:
                 id: store_pool_redox
                 value: !lambda "return id(realtime_redox).state;"
 
@@ -101,7 +103,7 @@ select:
     initial_option: Auto
     entity_category: config
     icon: mdi:engine
-  
+
 number:
   - platform: template
     name: Consigne Antigel
@@ -115,10 +117,11 @@ number:
     restore_value: True
     initial_value: 0.0
     entity_category: config
+
   - platform: template
     name: Consigne Redox Max
     id: max_redox
-    optimistic: True  
+    optimistic: True
     unit_of_measurement: mV
     device_class: voltage
     step: 10
@@ -131,7 +134,7 @@ number:
   - platform: template
     name: Consigne Redox Min
     id: min_redox
-    optimistic: True  
+    optimistic: True
     unit_of_measurement: mV
     device_class: voltage
     step: 10
@@ -144,7 +147,7 @@ number:
   - platform: template
     name: Délais Filtration
     id: pump_uptime_delay
-    optimistic: True  
+    optimistic: True
     unit_of_measurement: min
     step: 5
     min_value: 5
@@ -152,6 +155,18 @@ number:
     restore_value: True
     initial_value: 10
     entity_category: config
+
+  # Calibration manuelle, celle-ci sera remise à 0 en cas de calibration Auto
+  - platform: template
+    entity_category: "diagnostic"
+    name: "Redox Calibration Manuelle"
+    min_value: -300
+    max_value: 300
+    step: 1
+    optimistic: true
+    initial_value: 0
+    restore_value: true
+    id: "redox_manual_offset"
 
 sensor:
   # Sondes de températures
@@ -161,9 +176,10 @@ sensor:
     id: local_temp
     accuracy_decimals: 1
     filters:
-      - median:
-          window_size: 12
+      - sliding_window_moving_average:
+          window_size: 18
           send_every: 6
+          send_first_at: 6
 
   - platform: dallas
     address: $temp_address
@@ -171,9 +187,10 @@ sensor:
     accuracy_decimals: 1
     id: pipe_temp
     filters:
-      - median:
-          window_size: 12
+      - sliding_window_moving_average:
+          window_size: 18
           send_every: 6
+          send_first_at: 6
     on_value_range:
       - below: !lambda return id(min_antifreeze_temp).state;
         then:
@@ -219,7 +236,8 @@ sensor:
         return id(esptime).now().timestamp - id(pump_last_turn_on);
       } else {
         return 0.0;
-      } 
+      }
+
   - platform: ads1115
     id: ads1115_a0
     internal: true
@@ -228,9 +246,6 @@ sensor:
     update_interval: 10s
     filters:
       - multiply: 1000
-      - median:
-          window_size: 12
-          send_every: 6
 
   - platform: template
     name: Redox Temps Réel
@@ -241,7 +256,15 @@ sensor:
     entity_category: diagnostic
     id: realtime_redox
     accuracy_decimals: 1
-    lambda: return ((2500-id(ads1115_a0).state)/1.037) + id(redox_offset);
+    update_interval: 10s
+    lambda: |
+      if (id(redox_manual_offset).state != 0.0) return ((2500-id(ads1115_a0).state)/1.037) + id(redox_manual_offset).state;
+      else return ((2500-id(ads1115_a0).state)/1.037) + id(redox_offset);
+    filters:
+      - sliding_window_moving_average:
+          window_size: 18
+          send_every: 6
+          send_first_at: 6
 
   - platform: template
     name: Redox
@@ -270,7 +293,7 @@ sensor:
     internal: True
     id: min_antifreeze_temp
     lambda: return id(max_antifreeze_temp).state - 1;
-    
+
   - platform: uptime
     name: Uptime
     unit_of_measurement: s
@@ -287,7 +310,7 @@ binary_sensor:
     device_class: cold
     id: antifreeze
     icon: mdi:snowflake-alert
-    
+
   - platform: status
     name: Status
     entity_category: diagnostic
@@ -299,47 +322,70 @@ switch:
     id: pump
     restore_mode: RESTORE_DEFAULT_OFF
     icon: mdi:engine
-    on_turn_on: 
+    on_turn_on:
       then:
-        - globals.set: 
+        - globals.set:
             id: pump_last_turn_on
             value: !lambda "return id(esptime).now().timestamp;"
+
   - platform: gpio
-    pin: GPIO27
+    pin:
+      number: GPIO27
+      inverted: false
     name: Electrolyseur
     id: electrolyser
     restore_mode: RESTORE_DEFAULT_ON
     icon: mdi:chemical-weapon
 
-button: 
+button:
   - platform: template
     name: Redox Calibration 225mV
     entity_category: config
     on_press:
       then:
-        - globals.set: 
+        - number.set:
+            id: redox_manual_offset
+            value: 0
+        - delay: 180s
+        - globals.set:
             id: redox_offset
             value: !lambda "return 225 - (((2500-id(ads1115_a0).state)/1.037));"
         - component.update: redox_offset_sensor
         - component.update: realtime_redox
+        - homeassistant.service:
+              service: persistent_notification.create
+              data:
+                title: Message from ${friendly_name}
+              data_template:
+                message: Calibration Redox à 225mV terminée !
 
   - platform: template
     name: Redox Calibration 475mV
     entity_category: config
     on_press:
       then:
-        - globals.set: 
+        - number.set:
+            id: redox_manual_offset
+            value: 0
+        - delay: 180s
+        - globals.set:
             id: redox_offset
             value: !lambda "return 475 - (((2500-id(ads1115_a0).state)/1.037));"
         - component.update: redox_offset_sensor
         - component.update: realtime_redox
+        - homeassistant.service:
+              service: persistent_notification.create
+              data:
+                title: Message from ${friendly_name}
+              data_template:
+                message: Calibration Redox à 475mV terminée !
 
   - platform: template
     name: Redox Calibration Reset
     entity_category: config
     on_press:
       then:
-        - globals.set: 
+        - globals.set:
             id: redox_offset
             value: '0.0'
         - component.update: redox_offset_sensor
