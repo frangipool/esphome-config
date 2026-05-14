@@ -224,10 +224,14 @@ views:
             entities:
               - entity: select.frangipool_mode_filtration
                 name: Mode
-              - entity: datetime.frangipool_heure_pivot_filtration
-                name: Heure Pivot
-              - entity: number.frangipool_duree_pause_filtration
-                name: Durée Pause (h)
+              - entity: datetime.frangipool_heure_pivot_filtration_courbe
+                name: Heure Pivot (Courbe)
+              - entity: datetime.frangipool_heure_pivot_filtration_hiver
+                name: Heure Pivot (Hiver)
+              - entity: number.frangipool_duree_pause_filtration_courbe
+                name: Durée Pause Courbe (h)
+              - entity: number.frangipool_duree_pause_filtration_hiver
+                name: Durée Pause Hiver (h)
               - entity: number.frangipool_ratio_matin_filtration
                 name: Ratio Matin (%)
               - entity: number.frangipool_coefficient_filtration

@@ -90,9 +90,12 @@ number:
       then:
         - script.execute: _calcul_filtration
 
+  # Pause par sous-mode : Courbe garde une pause longue en journée (été) ;
+  # Hiver autorise une pause nulle pour un cycle continu (filtration nocturne
+  # contiguë avec pivot 03:00 par défaut).
   - platform: template
-    name: Durée Pause Filtration
-    id: filtration_pause
+    name: Durée Pause Filtration Courbe
+    id: filtration_pause_courbe
     optimistic: True
     unit_of_measurement: "h"
     step: 0.5
@@ -100,6 +103,21 @@ number:
     max_value: 12
     restore_value: True
     initial_value: 8
+    entity_category: config
+    on_value:
+      then:
+        - script.execute: _calcul_filtration
+
+  - platform: template
+    name: Durée Pause Filtration Hiver
+    id: filtration_pause_hiver
+    optimistic: True
+    unit_of_measurement: "h"
+    step: 0.5
+    min_value: 0
+    max_value: 12
+    restore_value: True
+    initial_value: 0
     entity_category: config
     on_value:
       then:
@@ -150,13 +168,28 @@ number:
         - script.execute: _calcul_filtration
 
 datetime:
+  # Pivot par sous-mode : Courbe (été, pause en journée → filtration matin+soir)
+  # vs Hiver (hivernage, pause centrée midi → cycles tombent vers la nuit).
+  # Sélectionné dans _calcul_filtration selon mode/sous-mode Auto.
   - platform: template
     type: time
-    name: Heure Pivot Filtration
-    id: filtration_pivot
+    name: Heure Pivot Filtration Courbe
+    id: filtration_pivot_courbe
     optimistic: True
     restore_value: True
     initial_value: "13:30:00"
+    entity_category: config
+    on_value:
+      then:
+        - script.execute: _calcul_filtration
+
+  - platform: template
+    type: time
+    name: Heure Pivot Filtration Hiver
+    id: filtration_pivot_hiver
+    optimistic: True
+    restore_value: True
+    initial_value: "03:00:00"
     entity_category: config
     on_value:
       then:
@@ -390,14 +423,46 @@ script:
 
           float coeff   = id(filtration_coeff).state;
           float ratio   = id(filtration_ratio_matin).state;
-          float pause_h = id(filtration_pause).state;
           float hmin    = id(filtration_hiver_min).state;
           float divisr  = id(filtration_diviseur).state;
+          // pause_h lue plus bas après détermination de is_winter (pause dédiée par sous-mode).
+
+          // Détermination du sous-mode (Courbe vs Hiver) AVANT la durée — le
+          // résultat pilote aussi le choix du pivot horaire plus bas.
+          std::string mode = id(filtration_mode).state;
+          bool is_winter;
+          if (mode == "Courbe") {
+            is_winter = false;
+          } else if (mode == "Hiver") {
+            is_winter = true;
+          } else {
+            // Mode Auto — hystérésis ±1 °C autour de 16 °C
+            // Seuils : bascule Hiver→Courbe à 17 °C, Courbe→Hiver à 15 °C.
+            // Premier boot (g_auto_initialized=false) : seuil direct à 16 °C sans hystérésis.
+            // g_auto_submode persiste (restore: true) pour conserver l'état saisonnier.
+            is_winter = id(g_auto_submode);
+            if (!id(g_auto_initialized)) {
+              if (temp_valid) {
+                is_winter = (t < 16.0f);
+                id(g_auto_submode) = is_winter;
+                id(g_auto_initialized) = true;
+              } else {
+                // Tout premier boot avec température invalide (capteur pas encore
+                // synchronisé ou déconnecté) : ne pas verrouiller g_auto_submode sur
+                // le fallback 10 °C. Default transitoire Courbe (sûr pour un déploiement
+                // estival). Le prochain recalc avec temp valide fera l'init réelle.
+                is_winter = false;
+              }
+            } else if (is_winter && t > 17.0f) {
+              is_winter = false;
+              id(g_auto_submode) = false;
+            } else if (!is_winter && t < 15.0f) {
+              is_winter = true;
+              id(g_auto_submode) = true;
+            }
+          }
 
           // --- Calcul durée totale ---
-          float duree_h = 0.0f;
-          std::string mode = id(filtration_mode).state;
-
           auto calc_courbe = [](float tc) -> float {
             if (tc < 10.0f) tc = 10.0f;
             // Courbe polynomiale du 3e degré ajustée sur les recommandations de filtration.
@@ -408,40 +473,9 @@ script:
           auto calc_hiver = [](float temp, float dur_min, float diviseur) -> float {
             return temp < 10.0f ? dur_min : temp / diviseur;
           };
-
-          if (mode == "Courbe") {
-            duree_h = calc_courbe(t);
-          } else if (mode == "Hiver") {
-            duree_h = calc_hiver(t, hmin, divisr);
-          } else {
-            // Mode Auto — hystérésis ±1 °C autour de 16 °C
-            // Seuils : bascule Hiver→Courbe à 17 °C, Courbe→Hiver à 15 °C.
-            // Premier boot (g_auto_initialized=false) : seuil direct à 16 °C sans hystérésis.
-            // g_auto_submode persiste (restore: true) pour conserver l'état saisonnier.
-            bool is_hiver = id(g_auto_submode);
-            if (!id(g_auto_initialized)) {
-              if (temp_valid) {
-                is_hiver = (t < 16.0f);
-                id(g_auto_submode) = is_hiver;
-                id(g_auto_initialized) = true;
-              } else {
-                // Tout premier boot avec température invalide (capteur pas encore
-                // synchronisé ou déconnecté) : ne pas verrouiller g_auto_submode sur
-                // le fallback 10 °C. Default transitoire Courbe (sûr pour un déploiement
-                // estival). Le prochain recalc avec temp valide fera l'init réelle.
-                is_hiver = false;
-              }
-            } else if (is_hiver && t > 17.0f) {
-              is_hiver = false;
-              id(g_auto_submode) = false;
-            } else if (!is_hiver && t < 15.0f) {
-              is_hiver = true;
-              id(g_auto_submode) = true;
-            }
-            duree_h = is_hiver
-              ? calc_hiver(t, hmin, divisr)
-              : calc_courbe(t);
-          }
+          float duree_h = is_winter
+            ? calc_hiver(t, hmin, divisr)
+            : calc_courbe(t);
 
           // Appliquer coefficient et clamp [0, MAX_MIN]
           duree_h *= coeff / 100.0f;
@@ -453,8 +487,13 @@ script:
           int dur_matin_min = (int)(dur_total_min * ratio / 100.0f);
           int dur_soir_min  = dur_total_min - dur_matin_min;
 
-          // Pivot et pause (en minutes depuis minuit).
-          int pivot_min = id(filtration_pivot).hour * 60 + id(filtration_pivot).minute;
+          // Pivot et pause dédiés par sous-mode (cf. is_winter) : Courbe (été)
+          // pause longue centrée jour ; Hiver pause typiquement nulle pour un
+          // cycle nocturne contigu.
+          float pause_h = is_winter ? id(filtration_pause_hiver).state : id(filtration_pause_courbe).state;
+          int pivot_h = is_winter ? id(filtration_pivot_hiver).hour   : id(filtration_pivot_courbe).hour;
+          int pivot_m = is_winter ? id(filtration_pivot_hiver).minute : id(filtration_pivot_courbe).minute;
+          int pivot_min = pivot_h * 60 + pivot_m;
           int pause_min = (int)(pause_h * 60.0f);
           // pause=0 → pause_start == pause_end == pivot : cycles contigus
           int pause_start = pivot_min - pause_min / 2;

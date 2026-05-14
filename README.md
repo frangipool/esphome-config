@@ -108,11 +108,17 @@ L'ESP calcule lui-même les horaires de filtration en fonction de la températur
 
 La durée journalière est répartie en deux plages de filtration : une le matin, une le soir. L'**heure pivot** définit le milieu de la pause entre les deux cycles.
 
+Le pivot et la pause sont **dédiés par sous-mode** — Courbe (été : pause longue en journée, cycles matin + soir) et Hiver (hivernage : pause typiquement nulle, cycle nocturne contigu). En mode `Auto`, c'est le sous-mode actif (`Courbe` ou `Hiver`) qui détermine quels paramètres sont utilisés.
+
 ```text
-Exemple : pivot 13h30, pause 8h, ratio 33 %, durée totale 9h
+Exemple Courbe : pivot 13h30, pause 8h, ratio 33 %, durée totale 9h
   → Cycle matin  :  07h30 – 10h30  (3h)
   → Pause        :  10h30 – 17h30
   → Cycle soir   :  17h30 – 23h30  (6h)
+
+Exemple Hiver : pivot 03h00, pause 0h, ratio 33 %, durée totale 3h
+  → Cycle matin  :  02h00 – 03h00  (1h, contigu)
+  → Cycle soir   :  03h00 – 05h00  (2h, contigu)
 ```
 
 Avec une **pause de 0 h**, les deux cycles sont contigus — la filtration est continue.
@@ -124,8 +130,10 @@ Tous les paramètres sont persistants (conservés après coupure de courant) et 
 | Paramètre | Défaut | Description |
 | --------- | ------ | ----------- |
 | Mode Filtration | Auto | Off / Hiver / Courbe / Auto |
-| Heure Pivot | 13:30 | Centre de la pause entre les deux cycles |
-| Durée Pause | 8 h | Durée de repos entre matin et soir (0 = continu) |
+| Heure Pivot Courbe | 13:30 | Centre de la pause (sous-mode Courbe : été) |
+| Heure Pivot Hiver | 03:00 | Centre de la pause (sous-mode Hiver : hivernage) |
+| Durée Pause Courbe | 8 h | Repos entre matin et soir en Courbe (0 = continu) |
+| Durée Pause Hiver | 0 h | Repos entre matin et soir en Hiver (0 = continu) |
 | Ratio Matin | 33 % | Part de la durée totale allouée au cycle matin |
 | Coefficient Filtration | 100 % | Multiplicateur global (50–150 %) pour ajuster la durée sans changer de mode |
 | Durée Hiver Min | 3 h | Durée journalière en mode Hiver quand T < 10 °C |
