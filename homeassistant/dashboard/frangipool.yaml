@@ -1,5 +1,9 @@
 # Dashboard Home Assistant — FrangiPool
 #
+# Layout : Sections view (HA 2024.3+) — responsive natif (1 col mobile / 3 col desktop).
+# Visibility : conditions natives par section (HA 2024.10+) — pas de wrapping `conditional`.
+# Cards : built-in (tile, gauge, heading, entities) + apexcharts-card (HACS).
+#
 # Import : HA Settings → Dashboards → Add dashboard → From YAML (raw config editor)
 #
 # Adaptation au device name :
@@ -10,193 +14,525 @@
 # Prérequis : HACS + apexcharts-card installé
 #   https://github.com/RomRider/apexcharts-card
 #
-# Note : l'uptime s'affiche en secondes brutes (HA ne supporte pas format:duration
-# pour les capteurs de durée — limitation connue).
+# Multi-preset : ce dashboard fonctionne tel quel sur tous les presets (salt_minimal
+# jusqu'à salt_booster_full). Les sections pH, Redox, Surpresseur, Électrolyseur Auto
+# et Calibration se masquent automatiquement si l'entité trigger est `unavailable`.
 
 title: FrangiPool
 views:
   - title: Piscine
     path: piscine
-    panel: true
-    cards:
-      - type: vertical-stack
+    icon: mdi:pool
+    type: sections
+    max_columns: 3
+    dense_section_placement: true
+
+    # ==================================================================
+    # BADGES — toujours visibles en haut, indépendants du scroll
+    # ==================================================================
+    badges:
+      - type: entity
+        entity: switch.frangipool_filtration
+        name: Pompe
+        color: blue
+        show_state: true
+        show_name: true
+        show_icon: true
+      - type: entity
+        entity: select.frangipool_mode_filtration
+        name: Mode
+        color: cyan
+        show_state: true
+        show_name: false
+        show_icon: true
+      - type: entity
+        entity: sensor.frangipool_phase_filtration
+        name: Phase
+        color: indigo
+        show_state: true
+        show_name: false
+        show_icon: true
+      # Antigel — visible uniquement quand actif (alerte)
+      - type: entity
+        entity: binary_sensor.frangipool_antigel
+        name: Antigel
+        color: red
+        show_state: false
+        show_name: true
+        show_icon: true
+        visibility:
+          - condition: state
+            entity: binary_sensor.frangipool_antigel
+            state: "on"
+      # Mode forcé — visible uniquement quand actif (countdown)
+      - type: entity
+        entity: sensor.frangipool_mode_force_temps_restant
+        name: Forcé
+        color: orange
+        show_state: true
+        show_name: true
+        show_icon: true
+        visibility:
+          - condition: state
+            entity: sensor.frangipool_mode_force_temps_restant
+            state_not: "Inactif"
+
+    sections:
+
+      # ==============================================================
+      # SIGNES VITAUX — gauges colorées (pH, Redox, Température)
+      # Pleine largeur, 3 jauges côte à côte sur desktop / empilées mobile
+      # ==============================================================
+      - type: grid
+        column_span: 3
         cards:
+          - type: heading
+            heading: Signes vitaux
+            icon: mdi:heart-pulse
+            heading_style: title
 
-          # ==============================================================
-          # SECTION 1 — ÉTAT DE LA PISCINE
-          # ==============================================================
-
-          # Commandes principales (toujours visibles)
-          - type: entities
-            title: Commandes
-            entities:
-              - entity: switch.frangipool_filtration
-                name: Pompe Filtration
-              - entity: switch.frangipool_electrolyseur
-                name: Électrolyseur
-
-          # Surpresseur — conditionnel (presets salt_booster_* uniquement)
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: switch.frangipool_surpresseur
-                state_not: unavailable
-            card:
-              type: entities
-              title: Surpresseur
-              entities:
-                - entity: switch.frangipool_surpresseur
-                  name: Surpresseur
-                - entity: select.frangipool_mode_surpresseur
-                  name: Mode Surpresseur
-
-          # pH — conditionnel (presets avec packages/ph.yaml)
-          # Plages d'affichage : vert 7.2–7.4 | orange 7.0–7.2 et 7.4–7.6 | rouge hors plage
-          # (distinct des consignes de régulation Redox de l'électrolyseur)
-          - type: conditional
-            conditions:
+          # pH — conditionnel (présent si packages/ph.yaml inclus)
+          - type: gauge
+            entity: sensor.frangipool_ph
+            name: pH
+            min: 6.5
+            max: 8.0
+            needle: true
+            # Plages d'affichage : vert 7.2–7.4 | orange 7.0–7.2 et 7.4–7.6 | rouge hors plage
+            segments:
+              - from: 6.5
+                color: "#e74c3c"
+              - from: 7.0
+                color: "#e67e22"
+              - from: 7.2
+                color: "#27ae60"
+              - from: 7.4
+                color: "#e67e22"
+              - from: 7.6
+                color: "#e74c3c"
+            grid_options:
+              columns: 4
+              rows: 2
+            visibility:
               - condition: state
                 entity: sensor.frangipool_ph
                 state_not: unavailable
-            card:
-              type: entity
-              entity: sensor.frangipool_ph
-              name: pH
 
-          # Redox — conditionnel (presets avec packages/redox.yaml)
-          # Plages d'affichage : vert 650–750 mV | orange 600–650 et 750–800 mV | rouge hors plage
-          - type: conditional
-            conditions:
+          # Redox — conditionnel (présent si packages/redox.yaml inclus)
+          - type: gauge
+            entity: sensor.frangipool_redox
+            name: Redox / ORP
+            unit: mV
+            min: 400
+            max: 900
+            needle: true
+            # Plages d'affichage : vert 650–750 mV | orange 600–650 et 750–800 | rouge hors plage
+            segments:
+              - from: 400
+                color: "#e74c3c"
+              - from: 600
+                color: "#e67e22"
+              - from: 650
+                color: "#27ae60"
+              - from: 750
+                color: "#e67e22"
+              - from: 800
+                color: "#e74c3c"
+            grid_options:
+              columns: 4
+              rows: 2
+            visibility:
               - condition: state
                 entity: sensor.frangipool_redox
                 state_not: unavailable
-            card:
-              type: entity
-              entity: sensor.frangipool_redox
-              name: Redox (ORP)
 
-          # Température piscine (toujours visible)
-          - type: entity
+          # Température piscine — toujours présente
+          - type: gauge
             entity: sensor.frangipool_temperature_piscine
-            name: Température Piscine
+            name: Température
+            unit: °C
+            min: 0
+            max: 35
+            needle: true
+            # Vert 22–30 (baignade confort) | bleu froid sous 22 | rouge sur-chauffe
+            segments:
+              - from: 0
+                color: "#3498db"
+              - from: 22
+                color: "#27ae60"
+              - from: 30
+                color: "#e67e22"
+              - from: 32
+                color: "#e74c3c"
+            grid_options:
+              columns: 4
+              rows: 2
 
-          # Diagnostics filtration (toujours visible — filtration.yaml dans tous les presets)
-          - type: entities
-            title: Filtration
-            entities:
-              - entity: sensor.frangipool_phase_filtration
-                name: Phase
-              - entity: sensor.frangipool_horaires_filtration
-                name: Horaires
-              - entity: sensor.frangipool_duree_filtration_journaliere
-                name: Planifiée (min)
-              - entity: sensor.frangipool_duree_filtration_effective
-                name: Effective (min)
-              - entity: sensor.frangipool_mode_auto_actif
-                name: Mode Auto actif
+      # ==============================================================
+      # FILTRATION — pompe, mode, phase, horaires (toujours visible)
+      # ==============================================================
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Filtration
+            icon: mdi:filter-variant
 
-          # Diagnostics electrolyse (toujours visible — electrolyser.yaml dans tous les presets)
-          - type: entities
-            title: Electrolyse
-            entities:
-              - entity: sensor.frangipool_duree_electrolyse
-                name: Durée session (min)
+          - type: tile
+            entity: switch.frangipool_filtration
+            name: Pompe
+            icon: mdi:water-pump
+            color: blue
+            features:
+              - type: toggle
+            grid_options:
+              columns: 6
 
-          # ==============================================================
-          # SECTION 2 — GRAPHIQUES HISTORIQUES (7 jours)
-          # ==============================================================
+          - type: tile
+            entity: select.frangipool_mode_filtration
+            name: Mode
+            icon: mdi:cog-transfer
+            color: cyan
+            features:
+              - type: select-options
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: sensor.frangipool_phase_filtration
+            name: Phase courante
+            icon: mdi:progress-clock
+            color: indigo
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: sensor.frangipool_horaires_filtration
+            name: Horaires du jour
+            icon: mdi:clock-outline
+            color: indigo
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: sensor.frangipool_duree_filtration_journaliere
+            name: Planifiée
+            icon: mdi:timer-sand
+            color: grey
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: sensor.frangipool_duree_filtration_effective
+            name: Effective
+            icon: mdi:timer-check
+            color: grey
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: sensor.frangipool_mode_auto_actif
+            name: Sous-mode Auto
+            icon: mdi:sync
+            color: cyan
+            grid_options:
+              columns: 12
+            visibility:
+              - condition: state
+                entity: sensor.frangipool_mode_auto_actif
+                state_not: unavailable
+
+      # ==============================================================
+      # MODE FORCÉ — override ponctuel (1 col side panel)
+      # ==============================================================
+      - type: grid
+        column_span: 1
+        cards:
+          - type: heading
+            heading: Mode forcé
+            icon: mdi:fast-forward
+
+          - type: tile
+            entity: sensor.frangipool_mode_force_temps_restant
+            name: Temps restant
+            icon: mdi:timer-outline
+            color: orange
+            grid_options:
+              columns: 12
+
+          - type: tile
+            entity: button.frangipool_forcer_filtration_2h
+            name: Forcer 2h
+            icon: mdi:numeric-2-box
+            color: orange
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.frangipool_forcer_filtration_2h
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: button.frangipool_forcer_filtration_6h
+            name: Forcer 6h
+            icon: mdi:numeric-6-box
+            color: orange
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.frangipool_forcer_filtration_6h
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: button.frangipool_forcer_filtration_24h
+            name: Forcer 24h
+            icon: mdi:numeric-24h-box-outline
+            color: orange
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.frangipool_forcer_filtration_24h
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: button.frangipool_arreter_mode_force
+            name: Arrêter
+            icon: mdi:stop-circle
+            color: red
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.frangipool_arreter_mode_force
+            grid_options:
+              columns: 6
+
+      # ==============================================================
+      # ÉLECTROLYSEUR — switch + régulation Redox (conditionnel)
+      # Visibility : présent si redox_electrolyser.yaml chargé
+      # ==============================================================
+      - type: grid
+        column_span: 2
+        visibility:
+          - condition: state
+            entity: select.frangipool_mode_electrolyseur
+            state_not: unavailable
+        cards:
+          - type: heading
+            heading: Électrolyseur
+            icon: mdi:lightning-bolt-circle
+
+          - type: tile
+            entity: switch.frangipool_electrolyseur
+            name: Production
+            icon: mdi:flash
+            color: yellow
+            features:
+              - type: toggle
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: select.frangipool_mode_electrolyseur
+            name: Mode régulation
+            icon: mdi:auto-mode
+            color: amber
+            features:
+              - type: select-options
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: number.frangipool_consigne_redox
+            name: Consigne Redox
+            icon: mdi:target
+            color: amber
+            features:
+              - type: numeric-input
+                style: buttons
+            grid_options:
+              columns: 6
+
+          - type: tile
+            entity: sensor.frangipool_duree_electrolyse
+            name: Durée session
+            icon: mdi:timer-play
+            color: yellow
+            grid_options:
+              columns: 6
+
+      # ==============================================================
+      # ÉLECTROLYSEUR — fallback simple si presets sans régulation Redox
+      # Visibility : switch présent ET select de mode absent (salt_minimal)
+      # ==============================================================
+      - type: grid
+        column_span: 1
+        visibility:
+          - condition: state
+            entity: switch.frangipool_electrolyseur
+            state_not: unavailable
+          - condition: state
+            entity: select.frangipool_mode_electrolyseur
+            state: unavailable
+        cards:
+          - type: heading
+            heading: Électrolyseur
+            icon: mdi:lightning-bolt-circle
+
+          - type: tile
+            entity: switch.frangipool_electrolyseur
+            name: Production
+            icon: mdi:flash
+            color: yellow
+            features:
+              - type: toggle
+
+          - type: tile
+            entity: sensor.frangipool_duree_electrolyse
+            name: Durée session
+            icon: mdi:timer-play
+            color: yellow
+
+      # ==============================================================
+      # SURPRESSEUR — conditionnel (presets salt_booster_*)
+      # ==============================================================
+      - type: grid
+        column_span: 1
+        visibility:
+          - condition: state
+            entity: switch.frangipool_surpresseur
+            state_not: unavailable
+        cards:
+          - type: heading
+            heading: Surpresseur
+            icon: mdi:fan
+
+          - type: tile
+            entity: switch.frangipool_surpresseur
+            name: Surpresseur
+            icon: mdi:fan
+            color: teal
+            features:
+              - type: toggle
+
+          - type: tile
+            entity: select.frangipool_mode_surpresseur
+            name: Mode
+            icon: mdi:cog-transfer
+            color: teal
+            features:
+              - type: select-options
+
+      # ==============================================================
+      # TENDANCES 7 JOURS — graphiques apexcharts (pleine largeur)
+      # ==============================================================
+      - type: grid
+        column_span: 3
+        cards:
+          - type: heading
+            heading: Tendances (7 jours)
+            icon: mdi:chart-line
 
           # Graphique pH — conditionnel
-          - type: conditional
-            conditions:
+          - type: custom:apexcharts-card
+            experimental:
+              color_threshold: true
+            header:
+              show: true
+              title: pH
+              show_states: true
+              colorize_states: true
+            graph_span: 7d
+            yaxis:
+              - id: ph
+                min: 6.5
+                max: 7.8
+                decimals: 1
+            series:
+              - entity: sensor.frangipool_ph
+                name: pH
+                yaxis_id: ph
+                type: line
+                stroke_width: 2
+                curve: smooth
+                group_by:
+                  func: avg
+                  duration: 1h
+                color_threshold:
+                  - value: 0
+                    color: "#e74c3c"
+                  - value: 7.0
+                    color: "#e67e22"
+                  - value: 7.2
+                    color: "#27ae60"
+                  - value: 7.4
+                    color: "#e67e22"
+                  - value: 7.6
+                    color: "#e74c3c"
+            grid_options:
+              columns: 6
+              rows: 4
+            visibility:
               - condition: state
                 entity: sensor.frangipool_ph
                 state_not: unavailable
-            card:
-              type: custom:apexcharts-card
-              # color_threshold colore la ligne selon la valeur courante
-              # Requis : clé top-level, pas dans la série
-              experimental:
-                color_threshold: true
-              header:
-                show: true
-                title: pH (7 jours)
-              graph_span: 7d
-              yaxis:
-                - id: ph
-                  min: 6.5
-                  max: 7.8
-                  decimals: 1
-              series:
-                - entity: sensor.frangipool_ph
-                  name: pH
-                  yaxis_id: ph
-                  type: line
-                  stroke_width: 2
-                  curve: smooth
-                  group_by:
-                    func: avg
-                    duration: 1h
-                  # Couleur dynamique de la ligne
-                  # Chaque entrée = "à partir de cette valeur, utiliser cette couleur"
-                  color_threshold:
-                    - value: 0
-                      color: "#e74c3c"    # rouge  : pH < 7.0
-                    - value: 7.0
-                      color: "#e67e22"    # orange : 7.0 – 7.2
-                    - value: 7.2
-                      color: "#27ae60"    # vert   : 7.2 – 7.4 (optimal)
-                    - value: 7.4
-                      color: "#e67e22"    # orange : 7.4 – 7.6
-                    - value: 7.6
-                      color: "#e74c3c"    # rouge  : > 7.6
 
           # Graphique Redox — conditionnel
-          - type: conditional
-            conditions:
+          - type: custom:apexcharts-card
+            experimental:
+              color_threshold: true
+            header:
+              show: true
+              title: Redox / ORP
+              show_states: true
+              colorize_states: true
+            graph_span: 7d
+            yaxis:
+              - id: redox
+                min: 500
+                max: 900
+                decimals: 0
+            series:
+              - entity: sensor.frangipool_redox
+                name: Redox (mV)
+                yaxis_id: redox
+                type: line
+                stroke_width: 2
+                curve: smooth
+                group_by:
+                  func: avg
+                  duration: 1h
+                color_threshold:
+                  - value: 0
+                    color: "#e74c3c"
+                  - value: 600
+                    color: "#e67e22"
+                  - value: 650
+                    color: "#27ae60"
+                  - value: 750
+                    color: "#e67e22"
+                  - value: 800
+                    color: "#e74c3c"
+            grid_options:
+              columns: 6
+              rows: 4
+            visibility:
               - condition: state
                 entity: sensor.frangipool_redox
                 state_not: unavailable
-            card:
-              type: custom:apexcharts-card
-              experimental:
-                color_threshold: true
-              header:
-                show: true
-                title: Redox / ORP (7 jours)
-              graph_span: 7d
-              yaxis:
-                - id: redox
-                  min: 500
-                  max: 900
-                  decimals: 0
-              series:
-                - entity: sensor.frangipool_redox
-                  name: Redox (mV)
-                  yaxis_id: redox
-                  type: line
-                  stroke_width: 2
-                  curve: smooth
-                  group_by:
-                    func: avg
-                    duration: 1h
-                  color_threshold:
-                    - value: 0
-                      color: "#e74c3c"    # rouge  : Redox < 600 mV
-                    - value: 600
-                      color: "#e67e22"    # orange : 600 – 650 mV
-                    - value: 650
-                      color: "#27ae60"    # vert   : 650 – 750 mV (optimal)
-                    - value: 750
-                      color: "#e67e22"    # orange : 750 – 800 mV
-                    - value: 800
-                      color: "#e74c3c"    # rouge  : > 800 mV
 
-          # Graphique Température — toujours visible
+          # Graphique Température — toujours visible (pleine largeur si seul)
           - type: custom:apexcharts-card
             header:
               show: true
-              title: Température Piscine (7 jours)
+              title: Température piscine
+              show_states: true
+              colorize_states: true
             graph_span: 7d
             yaxis:
               - id: temp
@@ -211,100 +547,174 @@ views:
                 stroke_width: 2
                 curve: smooth
                 color: "#3498db"
+                opacity: 0.4
                 group_by:
                   func: avg
                   duration: 1h
+            grid_options:
+              columns: 12
+              rows: 4
 
-          # ==============================================================
-          # SECTION 3 — CONFIGURATION FILTRATION (toujours visible)
-          # ==============================================================
+      # ==============================================================
+      # CONFIGURATION FILTRATION — paramètres avancés (densité élevée)
+      # ==============================================================
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Configuration filtration
+            icon: mdi:tune-variant
+            heading_style: subtitle
 
           - type: entities
-            title: Configuration Filtration
+            show_header_toggle: false
             entities:
-              - entity: select.frangipool_mode_filtration
-                name: Mode
+              - type: section
+                label: Heure pivot
               - entity: datetime.frangipool_heure_pivot_filtration_courbe
-                name: Heure Pivot (Courbe)
+                name: Pivot Courbe
+                icon: mdi:weather-sunny
               - entity: datetime.frangipool_heure_pivot_filtration_hiver
-                name: Heure Pivot (Hiver)
+                name: Pivot Hiver
+                icon: mdi:snowflake
+
+              - type: section
+                label: Durée de pause (centrée sur le pivot)
               - entity: number.frangipool_duree_pause_filtration_courbe
-                name: Durée Pause Courbe (h)
+                name: Pause Courbe
               - entity: number.frangipool_duree_pause_filtration_hiver
-                name: Durée Pause Hiver (h)
+                name: Pause Hiver
+
+              - type: section
+                label: Cycle matin / soir
               - entity: number.frangipool_ratio_matin_filtration
-                name: Ratio Matin (%)
+                name: Ratio matin
               - entity: number.frangipool_coefficient_filtration
-                name: Coefficient (%)
+                name: Coefficient global
+
+              - type: section
+                label: Mode hiver (température basse)
               - entity: number.frangipool_duree_hiver_min
-                name: Durée Hiver Min (h)
+                name: Durée min
               - entity: number.frangipool_diviseur_hiver
-                name: Diviseur Hiver
+                name: Diviseur
+
+              - type: section
+                label: Sécurité & échantillonnage
               - entity: number.frangipool_consigne_antigel
-                name: Consigne Antigel (°C)
-              # Note : si "Entity not found", vérifiez l'ID dans HA Developer Tools → States.
-              # Le nom ESPHome contient des parenthèses qui peuvent modifier le slug généré.
+                name: Seuil antigel
+                icon: mdi:snowflake-alert
+              # Note : si "Entity not found", vérifier l'ID dans HA Developer Tools → States.
+              # Le nom ESPHome contient des parenthèses qui peuvent altérer la slugification.
               - entity: number.frangipool_delais_mesures_au_lancement_de_la_filtration
-                name: Délai Mesures (min)
+                name: Délai mesures
+            grid_options:
+              columns: 12
 
-          # ==============================================================
-          # SECTION 3b — MODE FORCÉ
-          # Override ponctuel : pompe ON pour une durée fixe, puis reprise du planning.
-          # Le countdown affiche "Inactif" hors mode forcé.
-          # ==============================================================
+      # ==============================================================
+      # CALIBRATION ORP — conditionnel (présent si redox.yaml chargé)
+      # ==============================================================
+      - type: grid
+        column_span: 1
+        visibility:
+          - condition: state
+            entity: sensor.frangipool_redox_offset
+            state_not: unavailable
+        cards:
+          - type: heading
+            heading: Calibration sondes
+            icon: mdi:test-tube
+            heading_style: subtitle
+
+          - type: markdown
+            content: >
+              ⚠️ **Procédure** : sortir la sonde du circuit, la rincer à l'eau
+              déminéralisée, l'immerger dans la solution tampon, attendre 1 min
+              de stabilisation, puis cliquer sur le bouton correspondant.
+
+          - type: tile
+            entity: sensor.frangipool_redox_offset
+            name: Offset Redox actuel
+            icon: mdi:tune
+            color: grey
+            grid_options:
+              columns: 12
+
+          - type: tile
+            entity: button.frangipool_redox_calibration_225mv
+            name: Cal. 225 mV
+            icon: mdi:test-tube
+            color: green
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.frangipool_redox_calibration_225mv
+            grid_options:
+              columns: 12
+
+          - type: tile
+            entity: button.frangipool_redox_calibration_475mv
+            name: Cal. 475 mV
+            icon: mdi:test-tube
+            color: green
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.frangipool_redox_calibration_475mv
+            grid_options:
+              columns: 12
+
+          - type: tile
+            entity: button.frangipool_redox_calibration_reset
+            name: Reset calibration
+            icon: mdi:restore
+            color: red
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.frangipool_redox_calibration_reset
+            grid_options:
+              columns: 12
+
+      # ==============================================================
+      # DIAGNOSTICS — santé système (densité élevée, footer)
+      # ==============================================================
+      - type: grid
+        column_span: 1
+        cards:
+          - type: heading
+            heading: Diagnostics
+            icon: mdi:tools
+            heading_style: subtitle
 
           - type: entities
-            title: Mode Forcé
+            show_header_toggle: false
             entities:
-              - entity: sensor.frangipool_mode_force_temps_restant
-                name: Temps restant
-              - entity: button.frangipool_forcer_filtration_2h
-                name: Forcer 2h
-              - entity: button.frangipool_forcer_filtration_6h
-                name: Forcer 6h
-              - entity: button.frangipool_forcer_filtration_24h
-                name: Forcer 24h
-              - entity: button.frangipool_arreter_mode_force
-                name: Arrêter
-
-          # ==============================================================
-          # SECTION 4 — ÉLECTROLYSEUR & REDOX
-          # Conditionnelle : absent dans les presets sans redox_electrolyser.yaml
-          # Trigger : select.frangipool_mode_electrolyseur (pas switch.frangipool_electrolyseur
-          # qui existe dans salt_minimal sans les consignes Redox associées)
-          # ==============================================================
-
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: select.frangipool_mode_electrolyseur
-                state_not: unavailable
-            card:
-              type: entities
-              title: Électrolyseur & Redox
-              entities:
-                - entity: select.frangipool_mode_electrolyseur
-                  name: Mode Électrolyseur
-                # Consignes de régulation (distinct des plages d'affichage du graphique)
-                - entity: number.frangipool_consigne_redox
-                  name: Consigne Redox (mV)
-
-          # ==============================================================
-          # SECTION 5 — DIAGNOSTICS
-          # ==============================================================
-
-          - type: entities
-            title: Diagnostics
-            entities:
-              # Uptime en secondes brutes — HA ne supporte pas format:duration
-              # pour les capteurs de durée (limitation connue depuis HA 2024.12)
-              - entity: sensor.frangipool_uptime
-                name: Uptime (s)
-              - entity: sensor.frangipool_rssi
-                name: Signal WiFi (dBm)
               - entity: binary_sensor.frangipool_status
                 name: Connexion ESP
+              - entity: sensor.frangipool_rssi
+                name: Signal WiFi
+              # Uptime en secondes brutes — HA ne supporte pas format:duration
+              # pour les capteurs de durée (limitation connue).
+              - entity: sensor.frangipool_uptime
+                name: Uptime
               - entity: binary_sensor.frangipool_antigel
-                name: Mode Antigel actif
-              - entity: button.frangipool_reboot
-                name: Redémarrer l'ESP
+                name: Antigel actif
+            grid_options:
+              columns: 12
+
+          - type: tile
+            entity: button.frangipool_reboot
+            name: Redémarrer l'ESP
+            icon: mdi:restart
+            color: red
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.frangipool_reboot
+            grid_options:
+              columns: 12

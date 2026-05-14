@@ -236,15 +236,20 @@ Un dashboard Lovelace dédié est disponible dans le repo : [`homeassistant/dash
 
 **Import :** HA Settings → Dashboards → Add dashboard → From YAML (raw config editor) → coller le contenu du fichier.
 
-Le dashboard affiche sur une page unique :
+Le dashboard utilise le layout **Sections view** (HA 2024.3+) — responsive natif (1 colonne mobile / 3 colonnes desktop) — et présente, dans cet ordre :
 
-- État de la piscine : pompe, électrolyseur, pH et Redox avec coloration contextuelle (vert/orange/rouge), température
-- Diagnostics de filtration : phase courante, horaires calculés, durée journalière, mode Auto actif
-- Graphiques 7 jours : pH, Redox et température avec zones de couleur
-- Configuration : paramètres de filtration, consignes Redox, mode électrolyseur
-- Diagnostics système : uptime (en secondes), RSSI, état connexion, bouton reboot
+- **Badges en tête** (toujours visibles) : pompe, mode filtration, phase courante, et alertes conditionnelles antigel + mode forcé.
+- **Signes vitaux** : jauges colorées pH / Redox / Température avec segments vert-orange-rouge.
+- **Filtration** : pompe, mode, phase courante, horaires du jour, durées planifiée et effective, sous-mode Auto.
+- **Mode forcé** : countdown + boutons 2h / 6h / 24h / Stop.
+- **Électrolyseur** : production + mode régulation + consigne Redox + durée session (variante simplifiée pour les presets sans régulation Redox).
+- **Surpresseur** (presets `salt_booster_*`) : on/off + mode.
+- **Tendances 7 jours** : graphiques apexcharts pH / Redox / Température avec zones de couleur sur la ligne.
+- **Configuration filtration** : pivots Courbe/Hiver, pauses, ratio matin, coefficient, mode hiver, antigel, délai mesures.
+- **Calibration** : boutons 225 mV / 475 mV / Reset + offset Redox courant + rappel de procédure.
+- **Diagnostics** : connexion ESP, RSSI, uptime, antigel, redémarrage.
 
-Les sections pH, Redox, Booster et Électrolyseur+Redox se masquent automatiquement si les entités correspondantes sont absentes (compatibilité avec tous les presets, du `salt_minimal` au `salt_booster_full`).
+Les sections pH, Redox, Surpresseur, Électrolyseur et Calibration se masquent automatiquement (visibility natif) si les entités correspondantes sont absentes — un seul fichier couvre tous les presets, du `salt_minimal` au `salt_booster_full`.
 
 > **Adapter au device name :** si votre ESP ne s'appelle pas `frangipool`, remplacez toutes les occurrences de `frangipool` par votre device name (tirets → underscores dans les entity IDs HA).
 > **Uptime :** affiché en secondes brutes — HA ne supporte pas de formatage natif durée pour les capteurs de ce type.
